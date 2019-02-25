@@ -9,6 +9,7 @@ import random
 import numpy as np
 from vocab import Vocab
 from model.mentionatten_charcnn import AttenCNN
+from model.model import BiLSTM_Attn
 from torch.utils.data import DataLoader
 import norm_dataset
 import time
@@ -89,7 +90,10 @@ if __name__ == "__main__":
     train_iter = iter(train_loader)
     num_iter = len(train_loader)
 
-    model = AttenCNN(vocab, len(meshlabel_to_ix),char_to_ix)
+    if opt.model == 'lstm_att':
+        model = BiLSTM_Attn(vocab, len(meshlabel_to_ix), char_to_ix)
+    else:
+        model = AttenCNN(vocab, len(meshlabel_to_ix),char_to_ix)
 
     if torch.cuda.is_available():
         model.cuda(opt.gpu)
@@ -107,9 +111,13 @@ if __name__ == "__main__":
         dict_iter = iter(dict_loader)
         dict_num_iter = len(dict_loader)
 
+        bad_counter = 0
+        best_accuracy = 0
+
         #start training dictionary
         logging.info("batch_size: %s,  dict_num_iter %s, train num_iter %s" % (str(opt.batch_size), str(dict_num_iter), str(num_iter)))
-        for epoch in range(opt.dict_iteration):
+        # for epoch in range(opt.dict_iteration):
+        for epoch in range(9999):
             epoch_start = time.time()
 
             # sum_dict_cost = 0.0
@@ -140,12 +148,31 @@ if __name__ == "__main__":
             epoch_cost = epoch_finish - epoch_start
             # logging.info("Epoch {}, training time {}, dict Loss {:.4f}".format((epoch+1), epoch_cost, sum_dict_cost/(dict_num_iter + 1)))
 
-            logging.info('Epoch {}, Dict Training Accuary: {:.2f}%'.format((epoch+1), 100.0 * correct_1 / total_1))
-            if 100.0*correct_1/total_1 == 100.0:
+            accuracy = 100.0 * correct_1 / total_1
+            logging.info('Epoch {}, Dict Training Accuary: {:.2f}%'.format((epoch+1), accuracy))
+
+            if accuracy > opt.expected_accuracy:
+                logging.info("Exceed expected training accuracy, breaking ... ")
+                break
+
+            if accuracy > best_accuracy:
+                logging.info("Exceed previous best accuracy: %.2f" % (best_accuracy))
+                best_accuracy = accuracy
+
+                bad_counter = 0
+            else:
+                bad_counter += 1
+
+            if bad_counter >= opt.patience:
+                logging.info('Pretraining Early Stop!')
                 break
 
 
     ##train corpus
+    best_dev_f = -10
+
+    bad_counter = 0
+
     for epoch in range(opt.max_epoch):
         model.train()
         optimizer.zero_grad()
@@ -179,8 +206,23 @@ if __name__ == "__main__":
         logging.info('Epoch {}, Testing Accuary: {:.2f}%'.format((epoch + 1), test_acc))
 
         p, r, f = utils.calculateMacroAveragedFMeasure(test_instances, testdocuments)
-
         logging.info('Epoch {}, Macro P= {:.4f}, R= {:.4f}, F= {:.4f}'.format((epoch + 1), p, r, f))
+
+        if f > best_dev_f:
+            logging.info("Exceed previous best f score on test: %.4f" % (best_dev_f))
+
+            best_dev_f = f
+
+            bad_counter = 0
+
+        else:
+            bad_counter += 1
+
+        if bad_counter >= opt.patience:
+            logging.info('Early Stop!')
+            break
+
+
 
 
 
