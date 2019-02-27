@@ -240,7 +240,8 @@ if __name__ == "__main__":
 
     # load dict
     dict = load_dict(opt.dict_file)
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    # tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    tokenizer = BertTokenizer.from_pretrained(opt.bert_dir)
     meshlabels, meshlabel_to_ix = parser_dict(dict)
 
     dict_instances = getDictInstance(dict, meshlabel_to_ix, tokenizer)
@@ -257,13 +258,16 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_instances, opt.batch_size, shuffle=False, collate_fn=my_collate)
 
 
-
+    logging.info(opt.gpu)
+    logging.info(torch.cuda.is_available())
     if opt.gpu >= 0 and torch.cuda.is_available():
         device = torch.device('cuda', opt.gpu)
     else:
         device = torch.device('cpu')
 
-    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', cache_dir='/Users/feili/.pytorch_pretrained_bert/distributed_-1',
+    # model = BertForSequenceClassification.from_pretrained('bert-base-uncased', cache_dir='/Users/feili/.pytorch_pretrained_bert/distributed_-1',
+    #                                                       num_labels = len(meshlabel_to_ix))
+    model = BertForSequenceClassification.from_pretrained(opt.bert_dir,
                                                           num_labels = len(meshlabel_to_ix))
     model.to(device)
 
@@ -315,7 +319,7 @@ if __name__ == "__main__":
             epoch_cost = epoch_finish - epoch_start
 
             accuracy = 100.0 * correct_1 / total_1
-            logging.info('Epoch {}, Dict Training Accuary: {:.2f}%'.format((epoch + 1), accuracy))
+            logging.info('Epoch {}, time {:.2f}, Dict Training Accuary: {:.2f}%'.format((epoch + 1), epoch_cost, accuracy))
 
             if accuracy > opt.expected_accuracy:
                 logging.info("Exceed expected training accuracy, breaking ... ")
@@ -349,6 +353,8 @@ if __name__ == "__main__":
         # sum_cost = 0.0
         correct, total = 0, 0
 
+        epoch_start = time.time()
+
         for i in range(num_iter):
             mention_inputs, _, sentences, mask, targets = utils.endless_get_next_batch(train_loader, train_iter)
 
@@ -367,7 +373,10 @@ if __name__ == "__main__":
             optimizer.step()
             optimizer.zero_grad()
 
-        logging.info('Epoch {}, Training Accuary: {:.2f}%'.format((epoch + 1), 100.0 * correct / total))
+        epoch_finish = time.time()
+        epoch_cost = epoch_finish - epoch_start
+
+        logging.info('Epoch {}, time {:.2f}, Training Accuary: {:.2f}%'.format((epoch + 1), epoch_cost, 100.0 * correct / total))
 
         # evaluate on test sample_data
         test_acc, test_instances = evaluate(test_loader, model, meshlabel_to_ix)

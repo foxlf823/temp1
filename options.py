@@ -45,6 +45,7 @@ parser.add_argument('-model', default='att_cnn', help='att_cnn, lstm_att, bert')
 parser.add_argument('-expected_accuracy', type=int, default=95)
 parser.add_argument('-patience', type=int, default=20)
 parser.add_argument('-pretrain_epoch', type=int, default=9999)
+parser.add_argument('-bert_dir', default='./bert')
 
 opt = parser.parse_args()
 opt.use_cuda = opt.use_cuda and torch.cuda.is_available()
