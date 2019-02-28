@@ -306,7 +306,7 @@ if __name__ == "__main__":
                 dict_batch_output = model(dict_inputs, dict_sentences, mask, dict_targets)
                 dict_cost = criterion(dict_batch_output, dict_targets)
 
-                total_1 += len(dict_inputs[1])
+                total_1 += dict_targets.size(0)
                 _, dict_pred = torch.max(dict_batch_output, 1)
 
                 correct_1 += (dict_pred == dict_targets).sum().item()
@@ -364,7 +364,7 @@ if __name__ == "__main__":
             # sum_cost += cost.item()
 
             # train accuracy
-            total += len(mention_inputs[1])
+            total += targets.size(0)
             _, pred = torch.max(batch_output, 1)
             # correct += (pred == targets).sum().sample_data[0]
             correct += (pred == targets).sum().item()
