@@ -15,6 +15,8 @@ import norm_dataset
 import time
 import logging
 
+from transformer.Models import Transformer_Encoder_Classifier
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logging.info(opt)
@@ -92,19 +94,36 @@ if __name__ == "__main__":
 
     if opt.model == 'lstm_att':
         model = BiLSTM_Attn(vocab, len(meshlabel_to_ix), char_to_ix)
+        if opt.gpu >= 0 and torch.cuda.is_available():
+            model = model.cuda(opt.gpu)
+    elif opt.model == 'trans_cnn':
+        model = Transformer_Encoder_Classifier(vocab, len(meshlabel_to_ix), opt.len_max_seq, opt.gpu,
+            d_word_vec=vocab.emb_size, d_model=vocab.emb_size, d_inner=4*vocab.emb_size,
+            n_layers=6, n_head=8, d_k=vocab.emb_size//8, d_v=vocab.emb_size//8, dropout=opt.dropout,
+            tgt_emb_prj_weight_sharing=opt.tgt_emb_prj_weight_sharing)
+
+        if opt.gpu >= 0 and torch.cuda.is_available():
+            device = torch.device('cuda', opt.gpu)
+        else:
+            device = torch.device('cpu')
+
+        model.to(device)
     else:
         model = AttenCNN(vocab, len(meshlabel_to_ix),char_to_ix)
+        if opt.gpu >= 0 and torch.cuda.is_available():
+            model = model.cuda(opt.gpu)
 
-    if torch.cuda.is_available():
-        model.cuda(opt.gpu)
+
 
     optimizer = optim.Adam(model.parameters(), lr=opt.learning_rate)
     criterion = nn.CrossEntropyLoss()
 
-    if opt.fine_tune:
-        utils.unfreeze_net(model.embedding)
-    else:
-        utils.freeze_net(model.embedding)
+    if opt.model != 'trans_cnn':
+        if opt.fine_tune:
+            utils.unfreeze_net(model.embedding)
+        else:
+            utils.freeze_net(model.embedding)
+
     #pre-training dictionary instance
     if opt.pretraining:
 

@@ -33,7 +33,7 @@ parser.add_argument('-gpu', type=int, default=1, help='gpu id, set to -1 if use 
 parser.add_argument('-dict_iteration', type=int, default=100)
 parser.add_argument('-pretraining', action='store_true', default=False)
 parser.add_argument('-fine_tune', default=True, help='word embedding tune')
-parser.add_argument('-random_emb', default=True, help='random initialize word embedding')
+parser.add_argument('-random_emb', action='store_true', default=False)
 parser.add_argument('-use_word2digit', default=False)
 parser.add_argument('-nlp_tool', default='nltk', help='spacy, nltk, stanford')
 parser.add_argument('-max-norm', type=float, default=3.0, help='l2 constraint of parameters [default: 3.0]')
@@ -41,11 +41,18 @@ parser.add_argument('-kernel-num', type=int, default=100, help='number of each k
 parser.add_argument('-kernel-sizes', type=str, default='2,3,4', help='comma-separated kernel size to use for convolution')
 parser.add_argument('-sent_hidden_size', type=int, default=50)
 parser.add_argument('-sent_lstm',  default=False)
-parser.add_argument('-model', default='att_cnn', help='att_cnn, lstm_att, bert')
+parser.add_argument('-model', default='att_cnn', help='att_cnn, lstm_att, trans_cnn')
 parser.add_argument('-expected_accuracy', type=int, default=95)
 parser.add_argument('-patience', type=int, default=20)
 parser.add_argument('-pretrain_epoch', type=int, default=9999)
 parser.add_argument('-bert_dir', default='./bert')
+
+parser.add_argument("-len_max_seq", type=int, default=30)
+parser.add_argument('-tgt_emb_prj_weight_sharing', action='store_true', default=False)
+parser.add_argument("-unk_idx", type=int, default=0)
+
+
+
 
 opt = parser.parse_args()
 opt.use_cuda = opt.use_cuda and torch.cuda.is_available()

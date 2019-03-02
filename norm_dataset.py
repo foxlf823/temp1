@@ -1,4 +1,5 @@
 from torch.utils.data import Dataset
+import logging
 
 class NormDataset(Dataset):
     def __init__(self, X, Y):
@@ -15,6 +16,7 @@ class NormDataset(Dataset):
 def getNormInstance(documents, vocab, label_to_ix,char_to_ix):
     X = []
     Y = []
+    max_entity_length = 0
     for doc in documents:
         for entity in doc.entities:
             entity_words = []
@@ -33,6 +35,8 @@ def getNormInstance(documents, vocab, label_to_ix,char_to_ix):
             if len(entity_words) == 0:
                 continue
             instance['entity'] = entity_words
+            if len(entity_words) > max_entity_length:
+                max_entity_length = len(entity_words)
 
             #feature for output
             entity_features.append(entity.doc_id)
@@ -62,13 +66,14 @@ def getNormInstance(documents, vocab, label_to_ix,char_to_ix):
                 ab = label_to_ix['-1']
                 Y.append(label_to_ix['-1'])
 
-
+    logging.info("max_entity_length {}".format(max_entity_length))
     set = NormDataset(X, Y)
     return set
 
 def getDictInstance(dict, vocab, label_to_ix, char_to_ix):
     X = []
     Y = []
+    max_entity_length = 0
     for id, names in dict.id_to_names.items():
         for name in names:
 
@@ -89,7 +94,10 @@ def getDictInstance(dict, vocab, label_to_ix, char_to_ix):
             if len(name_words) == 0:
                 continue
 
-            instance['entity'] = [vocab.lookup(word) for word in name_words]
+            entity_words = [vocab.lookup(word) for word in name_words]
+            instance['entity'] = entity_words
+            if len(entity_words) > max_entity_length:
+                max_entity_length = len(entity_words)
 
             sentence_words = [vocab.lookup('concept')]
             instance['feature'] = features
@@ -100,5 +108,6 @@ def getDictInstance(dict, vocab, label_to_ix, char_to_ix):
             if id in label_to_ix.keys():
                 Y.append(label_to_ix[id])
 
+    logging.info("max_entity_length {}".format(max_entity_length))
     set = NormDataset(X, Y)
     return set

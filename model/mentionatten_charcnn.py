@@ -28,7 +28,7 @@ class AttenCNN(nn.Module):
 		inputs: (unpacked_padded_output: batch_size x seq_len x hidden_size, lengths: batch_size)
 		"""
 
-		entity_words, entity_lengths, entity_seq_recover = input
+		entity_words, _, entity_lengths, entity_seq_recover = input
 		entity_words = autograd.Variable(entity_words)
 		entity_words_embeds = self.embedding(entity_words)
 		batch_size, max_len, _ = entity_words_embeds.size()

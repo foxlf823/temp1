@@ -261,7 +261,7 @@ def my_collate(batch, sort):
     x1, x2, x3, x4, y = pad(x1, x2, x3, x4, y, opt.pad_idx, sort)
 
     if torch.cuda.is_available():
-        x1 = (x1[0].cuda(opt.gpu), x1[1].cuda(opt.gpu),x1[2].cuda(opt.gpu))
+        x1 = (x1[0].cuda(opt.gpu), x1[1].cuda(opt.gpu),x1[2].cuda(opt.gpu), x1[3].cuda(opt.gpu))
         x3 = (x3[0].cuda(opt.gpu), x3[1].cuda(opt.gpu))
         x4 = (x4[0].cuda(opt.gpu), x4[1].cuda(opt.gpu), x4[2].cuda(opt.gpu))
         y = y.cuda(opt.gpu)
@@ -275,6 +275,8 @@ def pad(x1, x2, x3, x4, y, eos_idx, sort):
 
     # entity
     padded_x = pad_sequence(x1, max_entity_len, eos_idx)
+    word_position = [list(range(1, entity_length+1)) for entity_length in entity_lengths]
+    word_position = pad_sequence(word_position, max_entity_len, eos_idx)
     entity_lengths = torch.LongTensor(entity_lengths)
 
     #sentence
@@ -325,6 +327,9 @@ def pad(x1, x2, x3, x4, y, eos_idx, sort):
             # sort by length
             sort_len, sort_idx = entity_lengths.sort(0, descending=True)
             padded_x = padded_x.index_select(0, sort_idx)
+
+            word_position = word_position.index_select(0, sort_idx)
+
             y = y.index_select(0, sort_idx)
 
             x2 =[x2[idx] for idx in sort_idx]
@@ -342,7 +347,7 @@ def pad(x1, x2, x3, x4, y, eos_idx, sort):
             _, entity_seq_recover = sort_idx.sort(0, descending=False)
 
 
-            return (padded_x, sort_len, entity_seq_recover), x2, (padded_x3,sentence_lengths), (char_seq_tensor,char_seq_lengths,char_seq_recover), y
+            return (padded_x, word_position, sort_len, entity_seq_recover), x2, (padded_x3,sentence_lengths), (char_seq_tensor,char_seq_lengths,char_seq_recover), y
     else:
         return (padded_x, entity_lengths, entity_seq_recover), x2, (padded_x3,sentence_lengths), (char_seq_tensor, char_seq_lengths, char_seq_recover), y
 

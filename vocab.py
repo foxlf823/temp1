@@ -22,19 +22,40 @@ def _readFloat(f):
 class Vocab:
 
     def __init__(self, alphabet_from_dataset, pretrained_file, emb_size):
-        # add UNK with its index 0
-        self.unk_tok = '<unk>'
-        self.unk_idx = 0
-        self.vocab_size = 1
-        self.v2wvocab = ['<unk>']
-        self.w2vvocab = {'<unk>': 0}
 
-        # add padding with its index 1
-        self.pad_tok = '<pad>'
-        self.pad_idx = opt.pad_idx
-        self.vocab_size += 1
-        self.v2wvocab.append('<pad>')
-        self.w2vvocab['<pad>'] = self.pad_idx
+        if opt.unk_idx == 1 and opt.pad_idx==0:
+            # add padding with its index 1
+            self.pad_tok = '<pad>'
+            self.pad_idx = opt.pad_idx
+            self.vocab_size = 1
+            self.v2wvocab = ['<pad>']
+            self.w2vvocab = {'<pad>':self.pad_idx}
+
+            # add UNK with its index 0
+            self.unk_tok = '<unk>'
+            self.unk_idx = opt.unk_idx
+            self.vocab_size += 1
+            self.v2wvocab.append('<unk>')
+            self.w2vvocab['<unk>'] = opt.unk_idx
+
+        elif opt.unk_idx == 0 and opt.pad_idx==1:
+            # add UNK with its index 0
+            self.unk_tok = '<unk>'
+            self.unk_idx = 0
+            self.vocab_size = 1
+            self.v2wvocab = ['<unk>']
+            self.w2vvocab = {'<unk>': 0}
+
+            # add padding with its index 1
+            self.pad_tok = '<pad>'
+            self.pad_idx = opt.pad_idx
+            self.vocab_size += 1
+            self.v2wvocab.append('<pad>')
+            self.w2vvocab['<pad>'] = self.pad_idx
+        else:
+            raise RuntimeError("bad configuration for vocab")
+
+
         # build vocabulary
         self.vocab_size += len(alphabet_from_dataset)
         cnt = 2
