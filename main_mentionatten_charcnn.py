@@ -15,7 +15,7 @@ import norm_dataset
 import time
 import logging
 
-from transformer.Models import Transformer_Encoder_Classifier
+from transformer.Models import Transformer_Pooling, Transformer_Attn
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -40,6 +40,8 @@ def evaluate(data_loader, model, label_to_ix):
         mention_inputs, features, sentences,char_inputs, targets = utils.endless_get_next_batch(data_loader, loader_it)
         targets = utils.get_var(targets)
         pred = model(mention_inputs, char_inputs)
+        # logging.info(pred.size())
+        # logging.info(pred)
         _, y_pred = torch.max(pred, 1)
         total += targets.size(0)
         # correct += (y_pred == targets).sum().sample_data[0]
@@ -94,35 +96,42 @@ if __name__ == "__main__":
 
     if opt.model == 'lstm_att':
         model = BiLSTM_Attn(vocab, len(meshlabel_to_ix), char_to_ix)
-        if opt.gpu >= 0 and torch.cuda.is_available():
-            model = model.cuda(opt.gpu)
-    elif opt.model == 'trans_cnn':
-        model = Transformer_Encoder_Classifier(vocab, len(meshlabel_to_ix), opt.len_max_seq, opt.gpu,
+
+    elif opt.model == 'trans_pool':
+        model = Transformer_Pooling(vocab, len(meshlabel_to_ix), opt.len_max_seq, opt.gpu,
             d_word_vec=vocab.emb_size, d_model=vocab.emb_size, d_inner=4*vocab.emb_size,
             n_layers=6, n_head=8, d_k=vocab.emb_size//8, d_v=vocab.emb_size//8, dropout=opt.dropout,
             tgt_emb_prj_weight_sharing=opt.tgt_emb_prj_weight_sharing)
 
-        if opt.gpu >= 0 and torch.cuda.is_available():
-            device = torch.device('cuda', opt.gpu)
-        else:
-            device = torch.device('cpu')
-
-        model.to(device)
+    elif opt.model == 'trans_att':
+        model = Transformer_Attn(vocab, len(meshlabel_to_ix), opt.len_max_seq, opt.gpu,
+            d_word_vec=vocab.emb_size, d_model=vocab.emb_size, d_inner=4*vocab.emb_size,
+            n_layers=6, n_head=8, d_k=vocab.emb_size//8, d_v=vocab.emb_size//8, dropout=opt.dropout,
+            tgt_emb_prj_weight_sharing=opt.tgt_emb_prj_weight_sharing)
     else:
         model = AttenCNN(vocab, len(meshlabel_to_ix),char_to_ix)
-        if opt.gpu >= 0 and torch.cuda.is_available():
-            model = model.cuda(opt.gpu)
+
+
+    # if opt.gpu >= 0 and torch.cuda.is_available():
+    #     model = model.cuda(opt.gpu)
+
+    if opt.gpu >= 0 and torch.cuda.is_available():
+        device = torch.device('cuda', opt.gpu)
+    else:
+        device = torch.device('cpu')
+
+    model.to(device)
 
 
 
     optimizer = optim.Adam(model.parameters(), lr=opt.learning_rate)
     criterion = nn.CrossEntropyLoss()
 
-    if opt.model != 'trans_cnn':
-        if opt.fine_tune:
-            utils.unfreeze_net(model.embedding)
-        else:
-            utils.freeze_net(model.embedding)
+
+    # if opt.fine_tune:
+    #     utils.unfreeze_net(model.embedding)
+    # else:
+    #     utils.freeze_net(model.embedding)
 
     #pre-training dictionary instance
     if opt.pretraining:
@@ -136,7 +145,7 @@ if __name__ == "__main__":
         #start training dictionary
         logging.info("batch_size: %s,  dict_num_iter %s, train num_iter %s" % (str(opt.batch_size), str(dict_num_iter), str(num_iter)))
         # for epoch in range(opt.dict_iteration):
-        for epoch in range(9999):
+        for epoch in range(opt.pretrain_epoch):
             epoch_start = time.time()
 
             # sum_dict_cost = 0.0

@@ -41,7 +41,7 @@ parser.add_argument('-kernel-num', type=int, default=100, help='number of each k
 parser.add_argument('-kernel-sizes', type=str, default='2,3,4', help='comma-separated kernel size to use for convolution')
 parser.add_argument('-sent_hidden_size', type=int, default=50)
 parser.add_argument('-sent_lstm',  default=False)
-parser.add_argument('-model', default='att_cnn', help='att_cnn, lstm_att, trans_cnn')
+parser.add_argument('-model', default='att_cnn', help='att_cnn, lstm_att, trans_pool, trans_att')
 parser.add_argument('-expected_accuracy', type=int, default=95)
 parser.add_argument('-patience', type=int, default=20)
 parser.add_argument('-pretrain_epoch', type=int, default=9999)

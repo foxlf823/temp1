@@ -208,7 +208,7 @@ class Transformer(nn.Module):
         return seq_logit.view(-1, seq_logit.size(2))
 
 
-class Transformer_Encoder_Classifier(nn.Module):
+class Transformer_Pooling(nn.Module):
 
     def __init__(
             self,
@@ -261,9 +261,92 @@ class Transformer_Encoder_Classifier(nn.Module):
         #
         # enc_output = enc_output*mask
 
-        _, max_len, _ = enc_output.size()
-        pooled_enc_output = nn.functional.avg_pool2d(enc_output.unsqueeze(1), (max_len, 1)).squeeze()
+        batch_size, max_len, _ = enc_output.size()
+        pooled_enc_output = nn.functional.avg_pool2d(enc_output.unsqueeze(1), (max_len, 1)).view(batch_size, -1)
 
+
+        seq_logit = self.tgt_word_prj(pooled_enc_output) * self.x_logit_scale
+
+        return seq_logit
+
+
+class DotAttentionLayer(nn.Module):
+    def __init__(self, hidden_size, gpu):
+        super(DotAttentionLayer, self).__init__()
+        self.hidden_size = hidden_size
+        self.W = nn.Linear(hidden_size, 1, bias=False)
+        self.gpu = gpu
+
+    def forward(self, inputs, lengths):
+        """
+        input: (unpacked_padded_output: batch_size x seq_len x hidden_size, lengths: batch_size)
+        """
+        batch_size, max_len, _ = inputs.size()
+        flat_input = inputs.contiguous().view(-1, self.hidden_size)
+        logits = self.W(flat_input).view(batch_size, max_len)
+        alphas = nn.functional.softmax(logits, dim=1)
+
+        # computing mask
+        idxes = torch.arange(0, max_len, out=torch.LongTensor(max_len)).unsqueeze(0)
+        if self.gpu >= 0 and torch.cuda.is_available():
+            idxes = idxes.cuda(self.gpu)
+        mask = (idxes<lengths.unsqueeze(1)).float()
+
+        alphas = alphas * mask
+        # renormalize
+        alphas = alphas / torch.sum(alphas, 1).view(-1, 1)
+        output = torch.bmm(alphas.unsqueeze(1), inputs).squeeze(1)
+        return output
+
+
+class Transformer_Attn(nn.Module):
+
+    def __init__(
+            self,
+            n_src_vocab, num_classes, len_max_seq, gpu,
+            d_word_vec=512, d_model=512, d_inner=2048,
+            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1,
+            tgt_emb_prj_weight_sharing=True):
+
+        super().__init__()
+
+        self.gpu = gpu
+
+        self.encoder = Encoder(
+            n_src_vocab=n_src_vocab.vocab_size, len_max_seq=len_max_seq,
+            d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
+            n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
+            dropout=dropout)
+
+        self.encoder.src_word_emb = n_src_vocab.init_embed_layer()
+
+        self.attn = DotAttentionLayer(d_model, gpu)
+
+        self.tgt_word_prj = nn.Linear(d_model, num_classes, bias=False)
+        nn.init.xavier_normal_(self.tgt_word_prj.weight)
+
+        assert d_model == d_word_vec, \
+        'To facilitate the residual connections, \
+         the dimensions of all module outputs shall be the same.'
+
+        if tgt_emb_prj_weight_sharing:
+            # Share the weight matrix between target word embedding & the final logit dense layer
+            self.tgt_word_prj.weight = self.encoder.tgt_word_emb.weight
+            self.x_logit_scale = (d_model ** -0.5)
+        else:
+            self.x_logit_scale = 1.
+
+
+
+    def forward(self, input, char_inputs):
+
+        entity_words, word_position, entity_lengths, entity_seq_recover = input
+
+        enc_output, *_ = self.encoder(entity_words, word_position)
+
+        batch_size, max_len, _ = enc_output.size()
+
+        pooled_enc_output = self.attn(enc_output, entity_lengths)
 
         seq_logit = self.tgt_word_prj(pooled_enc_output) * self.x_logit_scale
 
