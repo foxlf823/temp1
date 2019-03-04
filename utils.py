@@ -263,7 +263,7 @@ def my_collate(batch, sort):
     if torch.cuda.is_available():
         x1 = (x1[0].cuda(opt.gpu), x1[1].cuda(opt.gpu),x1[2].cuda(opt.gpu), x1[3].cuda(opt.gpu))
         x3 = (x3[0].cuda(opt.gpu), x3[1].cuda(opt.gpu))
-        x4 = (x4[0].cuda(opt.gpu), x4[1].cuda(opt.gpu), x4[2].cuda(opt.gpu))
+        x4 = (x4[0].cuda(opt.gpu), x4[1].cuda(opt.gpu), x4[2].cuda(opt.gpu), x4[3].cuda(opt.gpu))
         y = y.cuda(opt.gpu)
     return (x1, x2, x3, x4, y)
 
@@ -291,11 +291,17 @@ def pad(x1, x2, x3, x4, y, eos_idx, sort):
     length_list = [list(map(len, pad_char)) for pad_char in pad_chars]
     max_word_len = max(list(map(max, length_list)))
     char_seq_tensor = autograd.Variable(torch.zeros((batch_size, max_entity_len, max_word_len), dtype=torch.long))
+    char_position_tensor = torch.zeros((batch_size, max_entity_len, max_word_len), dtype=torch.long)
     char_seq_lengths = torch.LongTensor(length_list)
     for idx, (seq, seqlen) in enumerate(zip(pad_chars, char_seq_lengths)):
         for idy, (word, wordlen) in enumerate(zip(seq, seqlen)):
             # print len(word), wordlen
-            char_seq_tensor[idx, idy, :wordlen] = torch.LongTensor(word)
+            if wordlen.item() == 1 and word[0] == 0:
+                char_seq_tensor[idx, idy, :wordlen] = torch.LongTensor([1])
+                char_position_tensor[idx, idy, :wordlen] = torch.LongTensor([1])
+            else:
+                char_seq_tensor[idx, idy, :wordlen] = torch.LongTensor(word)
+                char_position_tensor[idx, idy, :wordlen] = torch.LongTensor(list(range(1, wordlen.item()+1)))
 
     char_seq_recover = None
     entity_seq_recover = None
@@ -339,15 +345,19 @@ def pad(x1, x2, x3, x4, y, eos_idx, sort):
 
 
             char_seq_tensor = char_seq_tensor[sort_idx].view(batch_size * max_entity_len, -1)
+            char_position_tensor = char_position_tensor[sort_idx].view(batch_size * max_entity_len, -1)
             char_seq_lengths = char_seq_lengths[sort_idx].view(batch_size * max_entity_len, )
             char_seq_lengths, char_perm_idx = char_seq_lengths.sort(0, descending=True)
             char_seq_tensor = char_seq_tensor[char_perm_idx]
+            char_position_tensor = char_position_tensor[char_perm_idx]
+
             _, char_seq_recover = char_perm_idx.sort(0, descending=False)
 
             _, entity_seq_recover = sort_idx.sort(0, descending=False)
 
 
-            return (padded_x, word_position, sort_len, entity_seq_recover), x2, (padded_x3,sentence_lengths), (char_seq_tensor,char_seq_lengths,char_seq_recover), y
+            return (padded_x, word_position, sort_len, entity_seq_recover), x2, (padded_x3,sentence_lengths), \
+                   (char_seq_tensor, char_position_tensor, char_seq_lengths,char_seq_recover), y
     else:
         return (padded_x, entity_lengths, entity_seq_recover), x2, (padded_x3,sentence_lengths), (char_seq_tensor, char_seq_lengths, char_seq_recover), y
 
@@ -367,15 +377,19 @@ def generate_word_alphabet(corpus_words, dict_words):
     words = list(set(corpus_words) | set(dict_words))
 
     char_to_ix = {}
+
     char_to_ix["<unk>"] = len(char_to_ix)
+
+    char_to_ix_1 = {}
     for word in words:
         if word not in word_to_ix.keys():
             word_to_ix[word] = len(word_to_ix)
         for char in word:
             if char not in char_to_ix.keys():
                 char_to_ix[char] = len(char_to_ix)
+                char_to_ix_1[char] = len(char_to_ix_1)
 
-    return word_to_ix, words,char_to_ix
+    return word_to_ix, words,char_to_ix, char_to_ix_1
 
 
 def removeStrInParentheses(str):

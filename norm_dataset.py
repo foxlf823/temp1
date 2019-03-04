@@ -17,6 +17,7 @@ def getNormInstance(documents, vocab, label_to_ix,char_to_ix):
     X = []
     Y = []
     max_entity_length = 0
+    max_word_length = 0
     for doc in documents:
         for entity in doc.entities:
             entity_words = []
@@ -30,6 +31,8 @@ def getNormInstance(documents, vocab, label_to_ix,char_to_ix):
                     token_char = []
                     for char in entity_word:
                         token_char.append(char_to_ix[char] if char in char_to_ix else char_to_ix["<unk>"])
+                    if len(token_char) > max_word_length:
+                        max_word_length = len(token_char)
                     char_idx.append(token_char)
 
             if len(entity_words) == 0:
@@ -67,6 +70,7 @@ def getNormInstance(documents, vocab, label_to_ix,char_to_ix):
                 Y.append(label_to_ix['-1'])
 
     logging.info("max_entity_length {}".format(max_entity_length))
+    logging.info("max_word_length {}".format(max_word_length))
     set = NormDataset(X, Y)
     return set
 
@@ -74,6 +78,7 @@ def getDictInstance(dict, vocab, label_to_ix, char_to_ix):
     X = []
     Y = []
     max_entity_length = 0
+    max_word_length = 0
     for id, names in dict.id_to_names.items():
         for name in names:
 
@@ -89,6 +94,8 @@ def getDictInstance(dict, vocab, label_to_ix, char_to_ix):
                     token_char = []
                     for char in word:
                         token_char.append(char_to_ix[char] if char in char_to_ix else char_to_ix["<unk>"])
+                    if len(token_char) > max_word_length:
+                        max_word_length = len(token_char)
                     char_idx.append(token_char)
 
             if len(name_words) == 0:
@@ -109,5 +116,6 @@ def getDictInstance(dict, vocab, label_to_ix, char_to_ix):
                 Y.append(label_to_ix[id])
 
     logging.info("max_entity_length {}".format(max_entity_length))
+    logging.info("max_word_length {}".format(max_word_length))
     set = NormDataset(X, Y)
     return set

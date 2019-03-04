@@ -14,8 +14,9 @@ from torch.utils.data import DataLoader
 import norm_dataset
 import time
 import logging
+import copy
 
-from transformer.Models import Transformer_Pooling, Transformer_Attn
+from transformer.Models import Transformer_Pooling, Transformer_Attn, Transformer_Attn_CNN
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -70,11 +71,14 @@ if __name__ == "__main__":
     meshlabels, meshlabel_to_ix, dict_words = utils.parser_dict(dict)
 
     corpus_words = utils.parser_corpus(traindocuments, devdocuments, testdocuments)
-    word_to_ix, all_words, char_to_ix = utils.generate_word_alphabet(corpus_words, dict_words)
+    word_to_ix, all_words, char_to_ix, char_to_ix_1 = utils.generate_word_alphabet(corpus_words, dict_words)
 
     if opt.random_emb:
         opt.emb_filename = ''
     vocab = Vocab(word_to_ix, opt.emb_filename, opt.word_emb_size)
+
+
+    char_vocab = Vocab(char_to_ix_1, opt.char_emb_filename, opt.char_emb_size)
 
     dict_instances = norm_dataset.getDictInstance(dict, vocab, meshlabel_to_ix,char_to_ix)
     train_instances = norm_dataset.getNormInstance(traindocuments,vocab, meshlabel_to_ix,char_to_ix )
@@ -106,10 +110,15 @@ if __name__ == "__main__":
     elif opt.model == 'trans_att':
         model = Transformer_Attn(vocab, len(meshlabel_to_ix), opt.len_max_seq, opt.gpu,
             d_word_vec=vocab.emb_size, d_model=vocab.emb_size, d_inner=4*vocab.emb_size,
-            n_layers=6, n_head=8, d_k=vocab.emb_size//8, d_v=vocab.emb_size//8, dropout=opt.dropout,
-            tgt_emb_prj_weight_sharing=opt.tgt_emb_prj_weight_sharing)
+            n_layers=opt.trans_layers, n_head=8, d_k=vocab.emb_size//8, d_v=vocab.emb_size//8, dropout=opt.dropout,
+                                 d_hidden=opt.hidden_size)
+    elif opt.model == 'trans_att_cnn':
+        model = Transformer_Attn_CNN(vocab, len(meshlabel_to_ix), opt.len_max_seq, opt.gpu, char_vocab, opt.len_max_char,
+            d_word_vec=vocab.emb_size, d_model=vocab.emb_size, d_inner=4*vocab.emb_size,
+            n_layers=opt.trans_layers, n_head=8, d_k=vocab.emb_size//8, d_v=vocab.emb_size//8, dropout=opt.dropout, d_hidden=opt.hidden_size)
+
     else:
-        model = AttenCNN(vocab, len(meshlabel_to_ix),char_to_ix)
+        model = AttenCNN(vocab, len(meshlabel_to_ix), char_to_ix)
 
 
     # if opt.gpu >= 0 and torch.cuda.is_available():

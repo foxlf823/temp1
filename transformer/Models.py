@@ -305,8 +305,8 @@ class Transformer_Attn(nn.Module):
             self,
             n_src_vocab, num_classes, len_max_seq, gpu,
             d_word_vec=512, d_model=512, d_inner=2048,
-            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1,
-            tgt_emb_prj_weight_sharing=True):
+            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1, d_hidden=100,
+            ):
 
         super().__init__()
 
@@ -316,26 +316,16 @@ class Transformer_Attn(nn.Module):
             n_src_vocab=n_src_vocab.vocab_size, len_max_seq=len_max_seq,
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
-            dropout=dropout)
+            dropout=0.1)
 
         self.encoder.src_word_emb = n_src_vocab.init_embed_layer()
 
         self.attn = DotAttentionLayer(d_model, gpu)
 
-        self.tgt_word_prj = nn.Linear(d_model, num_classes, bias=False)
-        nn.init.xavier_normal_(self.tgt_word_prj.weight)
+        self.dropout = nn.Dropout(dropout)
+        self.hidden = nn.Linear(d_model, d_hidden)
 
-        assert d_model == d_word_vec, \
-        'To facilitate the residual connections, \
-         the dimensions of all module outputs shall be the same.'
-
-        if tgt_emb_prj_weight_sharing:
-            # Share the weight matrix between target word embedding & the final logit dense layer
-            self.tgt_word_prj.weight = self.encoder.tgt_word_emb.weight
-            self.x_logit_scale = (d_model ** -0.5)
-        else:
-            self.x_logit_scale = 1.
-
+        self.tgt_word_prj = nn.Linear(d_hidden, num_classes)
 
 
     def forward(self, input, char_inputs):
@@ -348,6 +338,90 @@ class Transformer_Attn(nn.Module):
 
         pooled_enc_output = self.attn(enc_output, entity_lengths)
 
-        seq_logit = self.tgt_word_prj(pooled_enc_output) * self.x_logit_scale
+        output = self.dropout(pooled_enc_output)
+        output = self.hidden(output)
+
+        seq_logit = self.tgt_word_prj(output)
+
+        return seq_logit
+
+class CharCNN(nn.Module):
+    def __init__(self, embedding_dim, hidden_dim):
+        super(CharCNN, self).__init__()
+
+        self.hidden_dim = hidden_dim
+
+        self.char_cnn = nn.Conv1d(embedding_dim, self.hidden_dim, kernel_size=3, padding=1)
+
+    def get_last_hiddens(self, input):
+
+        batch_size = input.size(0)
+        char_embeds = input.transpose(2,1).contiguous()
+        char_cnn_out = self.char_cnn(char_embeds)
+        char_cnn_out = nn.functional.max_pool1d(char_cnn_out, char_cnn_out.size(2)).view(batch_size, -1)
+        return char_cnn_out
+
+class Transformer_Attn_CNN(nn.Module):
+
+    def __init__(
+            self,
+            n_src_vocab, num_classes, len_max_seq, gpu, char_vocab, len_max_char,
+            d_word_vec=512, d_model=512, d_inner=2048,
+            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1, d_hidden=100
+            ):
+
+        super().__init__()
+
+        self.gpu = gpu
+
+        self.encoder = Encoder(
+            n_src_vocab=n_src_vocab.vocab_size, len_max_seq=len_max_seq,
+            d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
+            n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
+            dropout=0.1)
+
+        self.encoder.src_word_emb = n_src_vocab.init_embed_layer()
+
+        self.char_encoder = Encoder(
+            n_src_vocab=char_vocab.vocab_size, len_max_seq=len_max_char,
+            d_word_vec=char_vocab.emb_size, d_model=char_vocab.emb_size, d_inner=4*char_vocab.emb_size,
+            n_layers=n_layers, n_head=8, d_k=char_vocab.emb_size//8, d_v=char_vocab.emb_size//8,
+            dropout=0.1)
+
+        self.char_encoder.src_word_emb = char_vocab.init_embed_layer()
+
+        self.char_feature = CharCNN(char_vocab.emb_size, char_vocab.emb_size)
+
+        self.input_size = d_model + char_vocab.emb_size
+
+        self.attn = DotAttentionLayer(self.input_size, gpu)
+
+        self.dropout = nn.Dropout(dropout)
+        self.hidden = nn.Linear(self.input_size, d_hidden)
+
+        self.tgt_word_prj = nn.Linear(d_hidden, num_classes)
+
+
+    def forward(self, input, char_inputs):
+        entity_words, word_position, entity_lengths, entity_seq_recover = input
+
+        batch_size, max_len = entity_words.size()
+
+        enc_output, *_ = self.encoder(entity_words, word_position)
+
+        char_inputs, char_position, char_seq_lengths, char_seq_recover = char_inputs
+        char_enc_output, *_ = self.char_encoder(char_inputs, char_position)
+        char_features = self.char_feature.get_last_hiddens(char_enc_output)
+        char_features = char_features[char_seq_recover]
+        char_features = char_features.view(batch_size, max_len, -1)
+
+        inputs = torch.cat((enc_output, char_features), 2)
+
+        pooled_enc_output = self.attn(inputs, entity_lengths)
+
+        output = self.dropout(pooled_enc_output)
+        output = self.hidden(output)
+
+        seq_logit = self.tgt_word_prj(output)
 
         return seq_logit
