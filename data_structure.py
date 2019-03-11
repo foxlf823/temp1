@@ -37,6 +37,7 @@ class Entity:
         self.gold_meshId = ""
         self.pre_meshId = ""
         self.sentence = None
+        self.subEntiyText = ''
 
     def setEntity(self, docId, start, end, text, type, meshId):
         self.doc_id = docId
@@ -56,6 +57,14 @@ class Entity:
         self.end = entity.end
         self.doc_id= entity.doc_id
         self.gold_meshId = entity.gold_meshId
+    def subEntityInitWithEntity(self, start, end, text, meshId, entity):
+        self.start = start
+        self.end = end
+        self.text = text
+        self.gold_meshId = meshId
+        self.doc_id = entity.doc_id
+        self.type = entity.type
+        self.sentence = entity.sentence
         
 class Document:
     def __init__(self):

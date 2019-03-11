@@ -3,7 +3,7 @@ import torch.nn as nn  ## neural net library
 import torch.optim as optim  # optimization package
 
 import utils
-from data_helpers import loadAbbreviations,load_dict,preprocessMentions,parserNcbiTxtFile_simple
+from data_helpers import loadAbbreviations,load_dict,preprocessMentions,parserNcbiTxtFile_simple,parserCdrTxtFile
 from options import opt
 import random
 import numpy as np
@@ -229,10 +229,14 @@ def evaluate(data_loader, model, label_to_ix):
 
 if __name__ == "__main__":
 
-    # load raw data
-    traindocuments = parserNcbiTxtFile_simple(opt.train_file)
-    devdocuments = parserNcbiTxtFile_simple(opt.dev_file)
-    testdocuments = parserNcbiTxtFile_simple(opt.test_file)
+    if opt.train_file.find('ncbi') != -1:
+        traindocuments = parserNcbiTxtFile_simple(opt.train_file)
+        devdocuments = parserNcbiTxtFile_simple(opt.dev_file)
+        testdocuments = parserNcbiTxtFile_simple(opt.test_file)
+    else:
+        traindocuments = parserCdrTxtFile(opt.train_file)
+        devdocuments = parserCdrTxtFile(opt.dev_file)
+        testdocuments = parserCdrTxtFile(opt.test_file)
 
     # replace abbr
     entityAbbres = loadAbbreviations(opt.abbre_file)

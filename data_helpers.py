@@ -106,6 +106,8 @@ def parserNcbiTxtFile_simple(path):
                     abstractt = linesplits[2]
             linesplitsEntity = line.split("\t")
             if len(linesplitsEntity) == 6:
+                if linesplitsEntity[4] == 'Chemical':
+                    continue
                 meshId = linesplitsEntity[len(linesplitsEntity)-1]
                 index = meshId.find(":")
                 if index != -1:
@@ -123,8 +125,8 @@ def parserNcbiTxtFile_simple(path):
         else:
             if len(id)>0 and len(title)>0 and len(abstractt)>0:
                 document.initDocument(id, title, abstractt)
-                if id == '2234245':
-                    print(id)
+                # if id == '2234245':
+                #     print(id)
                 document_text = title + " " + abstractt
                 sentences = get_sentences_and_tokens_from_nltk(document_text.lower(), nlp_tool, document.entities)
                 document.sents = sentences
@@ -154,3 +156,117 @@ def readwrongresult(wrongfile):
 
 
     return entities
+
+
+def parserCdrTxtFile(path):
+    if opt.nlp_tool == "nltk":
+        nlp_tool = nltk.data.load('tokenizers/punkt/english.pickle')
+
+    documents = []
+    id=title=abstractt = ""
+    doc = Document()
+    with codecs.open(path, 'r', 'utf-8') as fp:
+        for line in fp:
+            line = line.strip()
+            if line != '':
+                _t_position = line.find('|t|')
+                if _t_position != -1:
+                    id = line[0: _t_position]
+                    title = line[_t_position + len('|t|'):]
+
+                _a_position = line.find('|a|')
+                if _a_position != -1:
+                    abstractt = line[_a_position + len('|a|'):]
+
+                lineSplits = line.split("\t")
+                if len(lineSplits)>5:
+                    if lineSplits[4] =="Disease":
+                        lineSplits[3] = clean_str(lineSplits[3])
+                        if len(lineSplits) == 6:
+                            entity = Entity()
+
+                            if lineSplits[5] == "-1":
+                                continue
+
+                            if lineSplits[5].find("|") != -1:
+                                meshId = lineSplits[5].strip().split("|")[1]
+                                entity.setEntity(lineSplits[0], int(lineSplits[1]), int(lineSplits[2]),lineSplits[3], lineSplits[4], meshId)
+                            else:
+                                entity.setEntity(lineSplits[0], int(lineSplits[1]), int(lineSplits[2]), lineSplits[3], lineSplits[4], lineSplits[5].strip())
+                            doc.entities.append(entity)
+                        elif len(lineSplits) == 7:
+                            entity = Entity()
+                            entity.setEntity(lineSplits[0], int(lineSplits[1]), int(lineSplits[2]), lineSplits[3],lineSplits[4], lineSplits[5].strip())
+                            entity.subEntiyText = lineSplits[6]
+                            doc.entities.append(entity)
+            else:
+                if len(id)>0 and len(title)>0 and len(abstractt)>0:
+                    doc.doc_name = id
+                    doc.title = title
+                    doc.abstractt = abstractt
+                    document_text = title + " " + abstractt
+                    sentences = get_sentences_and_tokens_from_nltk(document_text.lower(), nlp_tool, doc.entities)
+                    doc.sents = sentences
+                    documents.append(doc)
+                    id = title = abstractt = ""
+                    doc = Document()
+
+        if len(id)>0 and len(title)>0 and len(abstractt)>0:
+            doc.name = id
+            doc.title = title
+            doc.abstractt = abstractt
+            document_text = title + " " + abstractt
+            sentences = get_sentences_and_tokens_from_nltk(document_text.lower(), nlp_tool, doc.entities)
+            doc.sents = sentences
+            documents.append(doc)
+
+    # Decompose a composite entity into simple entities
+    entitycount = 0
+    ret_documents = []
+    for doc in documents:
+        ret_doc = Document()
+        ret_doc.sents = doc.sents
+        ret_doc.initDocument(doc.doc_name, doc.title, doc.abstractt)
+        for entity in doc.entities:
+
+            idx = entity.gold_meshId.find("|")
+            # composite entity
+            if (idx != -1):
+                simpleEntities = generateEntities(entity)
+                ret_doc.entities.extend(simpleEntities)
+                entitycount += len(simpleEntities)
+            else:
+                # simple entity
+                ret_doc.entities.append(entity)
+                entitycount+=1
+
+        ret_documents.append(ret_doc)
+    logging.info('entity count= {}'.format(entitycount))
+    return ret_documents
+
+def generateEntities(entity):
+
+    ret_entities = []
+    start = entity.start
+    end = entity.end
+    meshIds = entity.gold_meshId.split("|")
+    entityTexts = entity.subEntiyText.split("|")
+    assert len(meshIds) == len(entityTexts),"error entity_3 {}, text {}".format(entity.doc_id, entity.text)
+
+    for i in range(len(meshIds)):
+        subEntity = Entity()
+        if i==0:
+            leftEnd = start + len(entityTexts[i])
+            subEntity.subEntityInitWithEntity(start, leftEnd, entityTexts[i], meshIds[i], entity)
+        elif i==len(meshIds)-1:
+            rightStart = end - len(entityTexts[i])
+            subEntity.subEntityInitWithEntity(rightStart, end, entityTexts[i], meshIds[i], entity)
+        else:
+            firstWord = entityTexts[i].split(" ")[0]
+            middleStart = start + entity.text.find(firstWord)
+            middleEnd = middleStart + len(entityTexts[i])
+            subEntity.subEntityInitWithEntity(middleStart, middleEnd, entityTexts[i], meshIds[i], entity)
+
+        ret_entities.append(subEntity)
+
+    return ret_entities

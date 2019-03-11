@@ -33,7 +33,7 @@ class AttenCNN(nn.Module):
 		entity_words_embeds = self.embedding(entity_words)
 		batch_size, max_len, _ = entity_words_embeds.size()
 
-		char_inputs, char_seq_lengths, char_seq_recover = char_inputs
+		char_inputs, _, char_seq_lengths, char_seq_recover = char_inputs
 		char_features = self.char_feature.get_last_hiddens(char_inputs)
 		char_features = char_features[char_seq_recover]
 		char_features = char_features.view(batch_size, max_len, -1)
